@@ -1,0 +1,18 @@
+[package]
+name = "rust-blueprint-api"
+version = "0.1.0"
+authors = ["Luis Dvlpr <luis.dvlpr@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "mylib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mybin"
+path = "src/main.rs"
+
+[dependencies]
+hyper = "0.13"
+pretty_env_logger = ""
+tokio = { version = "0.2", features = ["full"] }
