@@ -1,42 +1,52 @@
-#![deny(warnings)]
+use actix_web::{middleware, web, App, HttpRequest, HttpServer};
 
-use std::convert::Infallible;
-
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response, Server};
-
-extern crate mylib; // not needed since Rust edition 2018
-
-use mylib::test;
-
-pub fn demo() {
-    test();
+async fn index(req: HttpRequest) -> &'static str {
+    println!("REQ: {:?}", req);
+    "Hello world!"
 }
 
-async fn hello(_: Request<Body>) -> Result<Response<Body>, Infallible> {
-    Ok(Response::new(Body::from("Hello Kubernetes!")))
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
+    std::env::set_var("RUST_LOG", "actix_web=info");
+    env_logger::init();
+
+    
+
+    HttpServer::new(|| {
+        App::new()
+            // enable logger
+            .wrap(middleware::Logger::default())
+            .service(web::resource("/index.html").to(|| async { "Hello world!" }))
+            .service(web::resource("/").to(index))
+    })
+    .bind("127.0.0.1:8080")?
+    .run()
+    .await
 }
 
-#[tokio::main]
-pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    pretty_env_logger::init();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::dev::Service;
+    use actix_web::{http, test, web, App, Error};
 
-    // For every connection, we must make a `Service` to handle all
-    // incoming HTTP requests on said connection.
-    let make_svc = make_service_fn(|_conn| {
-        // This is the `Service` that will handle the connection.
-        // `service_fn` is a helper to convert a function that
-        // returns a Response into a `Service`.
-        async { Ok::<_, Infallible>(service_fn(hello)) }
-    });
+    #[actix_rt::test]
+    async fn test_index() -> Result<(), Error> {
+        let app = App::new().route("/", web::get().to(index));
+        let mut app = test::init_service(app).await;
 
-    let addr = ([0, 0, 0, 0], 3000).into();
+        let req = test::TestRequest::get().uri("/").to_request();
+        let resp = app.call(req).await.unwrap();
 
-    let server = Server::bind(&addr).serve(make_svc);
+        assert_eq!(resp.status(), http::StatusCode::OK);
 
-    println!("Listening on http://{}", addr);
+        let response_body = match resp.response().body().as_ref() {
+            Some(actix_web::body::Body::Bytes(bytes)) => bytes,
+            _ => panic!("Response error"),
+        };
 
-    server.await?;
+        assert_eq!(response_body, r##"Hello world!"##);
 
-    Ok(())
+        Ok(())
+    }
 }
